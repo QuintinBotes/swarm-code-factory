@@ -1079,6 +1079,8 @@ class WorldRepository:
         *,
         fact_id: uuid.UUID | None = None,
         run_id: uuid.UUID | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[FeedbackData]:
         stmt = select(WorldFactFeedback).where(WorldFactFeedback.workspace_id == workspace_id)
         if fact_id is not None:
@@ -1086,6 +1088,8 @@ class WorldRepository:
         if run_id is not None:
             stmt = stmt.where(WorldFactFeedback.run_id == run_id)
         stmt = stmt.order_by(WorldFactFeedback.created_at, WorldFactFeedback.id)
+        if limit is not None:
+            stmt = stmt.limit(limit).offset(offset)
         return [
             FeedbackData(
                 id=row.id,

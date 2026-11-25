@@ -636,3 +636,88 @@ def test_ingest_with_fake_model(factory, clock) -> None:
     moved = [item for item in facts if item["phrase"] == "moved to"]
     assert len(moved) == 1
     assert moved[0]["evidence"][0]["quote"] == "Acme moved to Berlin in 2020"
+
+
+# --- fact feedback (GET /world/facts/{id}/feedback) -------------------------- #
+
+
+def _fact_with_feedback(factory, clock, outcomes: list[str]) -> tuple[str, list[uuid.UUID]]:
+    from scf_db.models import AgentRun, WorldFactFeedback
+
+    owner = _client(factory, clock, _principal())
+    _declare_based_in(owner)
+    fact_id = _assert_based(owner, "Berlin")["id"]
+    runs: list[uuid.UUID] = []
+    with factory() as session:
+        for outcome in outcomes:
+            run = AgentRun(workspace_id=WS)
+            session.add(run)
+            session.flush()
+            runs.append(run.id)
+            # One shared timestamp: only the row-id tie-break orders them.
+            session.add(
+                WorldFactFeedback(
+                    workspace_id=WS,
+                    fact_id=uuid.UUID(fact_id),
+                    run_id=run.id,
+                    outcome=outcome,
+                    created_at=T0,
+                    updated_at=T0,
+                )
+            )
+        session.commit()
+    return fact_id, runs
+
+
+def test_fact_feedback_returns_rows_in_recorded_order(factory, clock) -> None:
+    fact_id, runs = _fact_with_feedback(factory, clock, ["reinforced", "weakened"])
+    client = _client(factory, clock, _principal(UserRole.VIEWER))
+    resp = client.get(f"/world/facts/{fact_id}/feedback")
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["items"]
+    assert {(i["run_id"], i["outcome"]) for i in items} == {
+        (str(runs[0]), "reinforced"),
+        (str(runs[1]), "weakened"),
+    }
+    assert all(set(i) == {"run_id", "outcome"} for i in items)
+    # Same created_at on both rows: the order must follow the row id.
+    with factory() as session:
+        from scf_db.models import WorldFactFeedback
+
+        ids = list(session.scalars(select(WorldFactFeedback.run_id).order_by(WorldFactFeedback.id)))
+    assert [i["run_id"] for i in items] == [str(r) for r in ids]
+    # Paging walks the same order.
+    page = client.get(f"/world/facts/{fact_id}/feedback", params={"limit": 1, "offset": 1})
+    assert [i["run_id"] for i in page.json()["items"]] == [str(ids[1])]
+
+
+def test_fact_feedback_empty_for_fact_without_rows(factory, clock) -> None:
+    fact_id, _ = _fact_with_feedback(factory, clock, [])
+    client = _client(factory, clock, _principal(UserRole.VIEWER))
+    resp = client.get(f"/world/facts/{fact_id}/feedback")
+    assert resp.status_code == 200
+    assert resp.json() == {"items": []}
+
+
+def test_fact_feedback_unknown_fact_is_404(factory, clock) -> None:
+    client = _client(factory, clock, _principal())
+    assert client.get(f"/world/facts/{uuid.uuid4()}/feedback").status_code == 404
+    fact_id, _ = _fact_with_feedback(factory, clock, ["reinforced"])
+    # The route exists for the owner, so the 404s above and below are not a missing route.
+    assert client.get(f"/world/facts/{fact_id}/feedback").status_code == 200
+    foreign = _client(factory, clock, _principal(workspace_id=WS2))
+    assert foreign.get(f"/world/facts/{fact_id}/feedback").status_code == 404
+
+
+def test_fact_feedback_requires_authentication(factory, clock) -> None:
+    fact_id, _ = _fact_with_feedback(factory, clock, ["reinforced"])
+    app = create_app()
+
+    def _get_db() -> Iterator[Session]:
+        with factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = _get_db
+    anon = TestClient(app)
+    assert anon.get("/world/facts").status_code == 401
+    assert anon.get(f"/world/facts/{fact_id}/feedback").status_code == 401
