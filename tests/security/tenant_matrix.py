@@ -373,6 +373,7 @@ ROUTES: dict[str, tuple[str, ...]] = {
     "GET /projects/{project_id}/specs": ("Project",),
     "GET /world/entities/{entity_id}": ("WorldEntity",),
     "GET /world/entities/{entity_id}/changes": ("WorldEntity",),
+    "GET /world/facts/{fact_id}/feedback": ("WorldFact",),
     "POST /world/facts/{fact_id}/supersede": ("WorldFact",),
     "POST /world/facts/{fact_id}/retract": ("WorldFact",),
     "POST /world/proposals/{proposal_id}/decision": ("WorldProposal",),
