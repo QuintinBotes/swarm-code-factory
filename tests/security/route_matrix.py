@@ -328,6 +328,7 @@ DECLARED: dict[str, Permission] = {
             "GET /world/entities/{entity_id}",
             "GET /world/entities/{entity_id}/changes",
             "GET /world/facts",
+            "GET /world/facts/{fact_id}/feedback",
             "GET /world/proposals",
             "GET /world/conflicts",
             "GET /world/ontology/classes",

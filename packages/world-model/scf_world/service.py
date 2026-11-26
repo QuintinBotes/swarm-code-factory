@@ -1124,8 +1124,12 @@ class WorldModelService:
         *,
         fact_id: uuid.UUID | None = None,
         run_id: uuid.UUID | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[FeedbackData]:
-        return self._repo.list_feedback(workspace_id, fact_id=fact_id, run_id=run_id)
+        return self._repo.list_feedback(
+            workspace_id, fact_id=fact_id, run_id=run_id, limit=limit, offset=offset
+        )
 
     def effective_confidences(
         self,

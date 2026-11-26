@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from scf_world import Layer, Mood, RelationKind, StatementInput
+from scf_world import FeedbackOutcome, Layer, Mood, RelationKind, StatementInput
 
 
 class StatementIn(BaseModel):
@@ -103,6 +103,15 @@ class FactWriteOut(FactOut):
 
 class FactListOut(BaseModel):
     items: list[FactOut]
+
+
+class FeedbackOut(BaseModel):
+    run_id: uuid.UUID
+    outcome: FeedbackOutcome
+
+
+class FeedbackListOut(BaseModel):
+    items: list[FeedbackOut]
 
 
 class EntityOut(BaseModel):

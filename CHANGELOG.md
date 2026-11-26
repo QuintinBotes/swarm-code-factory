@@ -19,6 +19,7 @@ sections by hand; write a well-formed commit instead.
 
 ### Added
 
+- **world**: `GET /world/facts/{id}/feedback` lists the run outcomes recorded against a fact, oldest first (#357)
 - **self-eval**: enforce the gate on config changes + worker-driven run (Phase A wiring) (#66)
 - **self-eval**: baseline persistence + live agent-backed eval runner (Phase A substrate) (#65)
 - Self-Eval Gate — block config changes that regress a workspace's private per-repo suite (trust-layer 4/4) (#64)

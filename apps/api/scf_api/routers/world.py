@@ -45,6 +45,8 @@ from scf_api.schemas.world import (
     FactListOut,
     FactOut,
     FactWriteOut,
+    FeedbackListOut,
+    FeedbackOut,
     IngestIn,
     IngestOut,
     MergeIn,
@@ -462,6 +464,29 @@ def query_facts(
     effective = _effective(service, principal.workspace_id, facts)
     return FactListOut(
         items=[_fact_out(fact, evidence, effective_confidence=effective[fact.id]) for fact in facts]
+    )
+
+
+# Keeps OFFSET inside a 32-bit signed integer, which every backend binds.
+_MAX_OFFSET = 2**31 - 1
+
+
+@router.get("/facts/{fact_id}/feedback", response_model=FeedbackListOut)
+def list_fact_feedback(
+    principal: ReaderDep,
+    service: ServiceDep,
+    fact_id: uuid.UUID,
+    limit: Annotated[int, Query(ge=1, le=500)] = 500,
+    offset: Annotated[int, Query(ge=0, le=_MAX_OFFSET)] = 0,
+) -> FeedbackListOut:
+    """Run outcomes recorded against one fact, oldest first."""
+    with _world_errors():
+        service.get_fact(principal.workspace_id, fact_id)
+        rows = service.list_feedback(
+            principal.workspace_id, fact_id=fact_id, limit=limit, offset=offset
+        )
+    return FeedbackListOut(
+        items=[FeedbackOut(run_id=row.run_id, outcome=row.outcome) for row in rows]
     )
 
 
