@@ -467,13 +467,17 @@ def query_facts(
     )
 
 
+# Keeps OFFSET inside a 32-bit signed integer, which every backend binds.
+_MAX_OFFSET = 2**31 - 1
+
+
 @router.get("/facts/{fact_id}/feedback", response_model=FeedbackListOut)
 def list_fact_feedback(
     principal: ReaderDep,
     service: ServiceDep,
     fact_id: uuid.UUID,
     limit: Annotated[int, Query(ge=1, le=500)] = 500,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=_MAX_OFFSET)] = 0,
 ) -> FeedbackListOut:
     """Run outcomes recorded against one fact, oldest first."""
     with _world_errors():

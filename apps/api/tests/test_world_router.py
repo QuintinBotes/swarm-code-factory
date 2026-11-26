@@ -686,6 +686,29 @@ def test_fact_feedback_returns_rows_in_recorded_order(factory, clock) -> None:
 
         ids = list(session.scalars(select(WorldFactFeedback.run_id).order_by(WorldFactFeedback.id)))
     assert [i["run_id"] for i in items] == [str(r) for r in ids]
+    # Feedback on another fact must not leak into this fact's list.
+    other = _assert_based(_client(factory, clock, _principal()), "Paris")["id"]
+    assert other != fact_id
+    with factory() as session:
+        from scf_db.models import AgentRun, WorldFactFeedback
+
+        stray = AgentRun(workspace_id=WS)
+        session.add(stray)
+        session.flush()
+        session.add(
+            WorldFactFeedback(
+                workspace_id=WS,
+                fact_id=uuid.UUID(other),
+                run_id=stray.id,
+                outcome="weakened",
+                created_at=T0,
+                updated_at=T0,
+            )
+        )
+        session.commit()
+    again = client.get(f"/world/facts/{fact_id}/feedback").json()["items"]
+    assert str(stray.id) not in [i["run_id"] for i in again]
+    assert [i["run_id"] for i in again] == [i["run_id"] for i in items]
     # Paging walks the same order.
     page = client.get(f"/world/facts/{fact_id}/feedback", params={"limit": 1, "offset": 1})
     assert [i["run_id"] for i in page.json()["items"]] == [str(ids[1])]
@@ -721,3 +744,13 @@ def test_fact_feedback_requires_authentication(factory, clock) -> None:
     anon = TestClient(app)
     assert anon.get("/world/facts").status_code == 401
     assert anon.get(f"/world/facts/{fact_id}/feedback").status_code == 401
+
+
+def test_fact_feedback_offset_beyond_integer_range_is_422(factory, clock) -> None:
+    fact_id, _ = _fact_with_feedback(factory, clock, ["reinforced"])
+    client = _client(factory, clock, _principal(UserRole.VIEWER))
+    too_big = client.get(f"/world/facts/{fact_id}/feedback", params={"offset": 2**63})
+    assert too_big.status_code == 422
+    assert client.get(f"/world/facts/{fact_id}/feedback", params={"offset": 2**31 - 1}).json() == {
+        "items": []
+    }
